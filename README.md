@@ -14,9 +14,16 @@ A smart contract for swapping multiple ERC20 tokens to ETH using Uniswap V2. Thi
 
 ## Contract Overview
 
-### `SwapAllToETH`
+### `SwapAllToETH` (Non-Upgradeable)
 
 The main contract that handles token swapping functionality.
+
+### `SwapAllToETHUpgradeable` (Upgradeable)
+
+An upgradeable version of the contract using OpenZeppelin's UUPS proxy pattern. This version allows for:
+- Contract upgrades without losing state
+- Admin functions to update router and WETH addresses
+- Enhanced security with upgrade controls
 
 #### Key Functions
 
@@ -90,6 +97,43 @@ npm run deploy:sepolia
 #### Mainnet
 ```bash
 npm run deploy:mainnet
+```
+
+### Upgradeable Contract Deployment
+
+#### Local Network
+```bash
+npm run deploy:upgradeable
+```
+
+#### Test Networks
+```bash
+# Goerli
+npm run deploy:upgradeable:goerli
+
+# Sepolia
+npm run deploy:upgradeable:sepolia
+```
+
+#### Mainnet
+```bash
+npm run deploy:upgradeable:mainnet
+```
+
+### Contract Upgrades
+
+To upgrade the contract, set the `PROXY_ADDRESS` environment variable and run:
+
+```bash
+# Local
+npm run upgrade
+
+# Test Networks
+npm run upgrade:goerli
+npm run upgrade:sepolia
+
+# Mainnet
+npm run upgrade:mainnet
 ```
 
 ## Network Configuration
