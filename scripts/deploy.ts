@@ -99,6 +99,16 @@ main()
     console.log(`WETH Address: ${deploymentInfo.wethAddress}`);
     console.log(`Deployer: ${deploymentInfo.deployer}`);
     console.log(`Timestamp: ${deploymentInfo.timestamp}`);
+    
+    console.log("\n=== Recovery Function Examples ===");
+    console.log("// Recover both ETH and ERC20 tokens in one transaction:");
+    console.log("// await swapAllToETH.recoverBoth(");
+    console.log("//   [token1Address, token2Address], // Array of token addresses");
+    console.log("//   [amount1, amount2],             // Array of amounts to recover");
+    console.log("//   ethers.parseEther('1.0'),       // ETH amount to recover");
+    console.log("//   recipientAddress                 // Address to send to");
+    console.log("// );");
+    
     process.exit(0);
   })
   .catch((error) => {

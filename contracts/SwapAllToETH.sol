@@ -61,21 +61,9 @@ contract SwapAllToETH is ReentrancyGuard, Ownable {
                 if (userWeth == 0) continue;
 
                 // pull in WETH
-                try IERC20(WETH).safeTransferFrom(msg.sender, address(this), userWeth) {} 
-                catch {
-                    emit TokenSwapFailed(msg.sender, WETH);
-                    continue;
-                }
-
+                IERC20(WETH).safeTransferFrom(msg.sender, address(this), userWeth);
                 // unwrap
-                try IWETH(WETH).withdraw(userWeth) {} 
-                catch {
-                    // refund WETH if unwrap fails
-                    IERC20(WETH).safeTransfer(msg.sender, userWeth);
-                    emit TokenSwapFailed(msg.sender, WETH);
-                    continue;
-                }
-
+                IWETH(WETH).withdraw(userWeth);
                 // send ETH
                 (bool sent,) = msg.sender.call{value: userWeth}("");
                 if (!sent) {
@@ -95,11 +83,7 @@ contract SwapAllToETH is ReentrancyGuard, Ownable {
 
             // 2) pull tokens in
             uint256 beforeBal = token.balanceOf(address(this));
-            try token.safeTransferFrom(msg.sender, address(this), userBal) {} 
-            catch {
-                emit TokenSwapFailed(msg.sender, tokenAddr);
-                continue;
-            }
+            token.safeTransferFrom(msg.sender, address(this), userBal);
             uint256 received = token.balanceOf(address(this)) - beforeBal;
             if (received == 0) {
                 emit TokenSwapFailed(msg.sender, tokenAddr);
@@ -200,6 +184,34 @@ contract SwapAllToETH is ReentrancyGuard, Ownable {
         (bool sent,) = to.call{value: amount}("");
         if (!sent) revert ETHTransferFailed();
         emit RecoveredETH(amount, to);
+    }
+
+    /// @notice Recover both ETH and ERC20 tokens in a single transaction
+    function recoverBoth(
+        address[] calldata tokens,
+        uint256[] calldata amounts,
+        uint256 ethAmount,
+        address to
+    ) external onlyOwner {
+        if (to == address(0)) revert InvalidRecipient();
+        if (tokens.length != amounts.length) revert InvalidAmount();
+        
+        // Recover ERC20 tokens
+        for (uint256 i = 0; i < tokens.length; i++) {
+            if (tokens[i] == address(0)) revert InvalidToken();
+            uint256 bal = IERC20(tokens[i]).balanceOf(address(this));
+            if (amounts[i] == 0 || amounts[i] > bal) revert InvalidAmount();
+            IERC20(tokens[i]).safeTransfer(to, amounts[i]);
+            emit RecoveredERC20(tokens[i], amounts[i], to);
+        }
+        
+        // Recover ETH
+        if (ethAmount > 0) {
+            if (address(this).balance < ethAmount) revert InvalidAmount();
+            (bool sent,) = to.call{value: ethAmount}("");
+            if (!sent) revert ETHTransferFailed();
+            emit RecoveredETH(ethAmount, to);
+        }
     }
 
     /// @notice Needed to receive ETH from Uniswap

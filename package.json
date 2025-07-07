@@ -19,7 +19,10 @@
     "upgrade": "hardhat run scripts/upgrade.ts",
     "upgrade:goerli": "hardhat run scripts/upgrade.ts --network goerli",
     "upgrade:sepolia": "hardhat run scripts/upgrade.ts --network sepolia",
-    "upgrade:mainnet": "hardhat run scripts/upgrade.ts --network mainnet"
+    "upgrade:mainnet": "hardhat run scripts/upgrade.ts --network mainnet",
+    "coverage": "hardhat coverage",
+    "size": "hardhat size-contracts",
+    "export-abi": "hardhat export-abi"
   },
   "keywords": [
     "ethereum",
@@ -43,15 +46,18 @@
     "chai": "^4.3.7",
     "ethers": "^6.7.0",
     "hardhat": "^2.19.0",
+    "hardhat-abi-exporter": "^2.11.0",
+    "hardhat-contract-sizer": "^2.10.0",
     "hardhat-gas-reporter": "^1.0.9",
-    "solidity-coverage": "^0.8.5",
+    "hardhat-tracer": "^3.2.1",
+    "solidity-coverage": "^0.8.16",
     "ts-node": "^10.9.1",
     "typechain": "^8.3.0",
     "typescript": "^5.8.3"
   },
   "dependencies": {
-    "@openzeppelin/contracts": "^5.0.0",
-    "@openzeppelin/contracts-upgradeable": "^5.0.0",
+    "@openzeppelin/contracts": "^4.9.5",
+    "@openzeppelin/contracts-upgradeable": "^4.9.5",
     "@uniswap/v2-periphery": "^1.1.0-beta.0",
     "dotenv": "^16.3.1"
   }

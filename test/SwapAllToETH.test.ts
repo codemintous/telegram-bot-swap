@@ -182,5 +182,37 @@ describe("SwapAllToETH", function () {
       const finalBalance = await ethers.provider.getBalance(user2.address);
       expect(finalBalance - initialBalance).to.equal(ethAmount);
     });
+
+    it("Should allow owner to recover both ETH and ERC20 tokens together", async function () {
+      const { swapAllToETH, mockToken, owner, user2 } = await loadFixture(deployContractFixture);
+      
+      // Send tokens to contract
+      const tokenAmount = ethers.parseUnits("100", 18);
+      await mockToken.mint(await swapAllToETH.getAddress(), tokenAmount);
+      
+      // Send ETH to contract
+      const ethAmount = ethers.parseEther("0.5");
+      await owner.sendTransaction({
+        to: await swapAllToETH.getAddress(),
+        value: ethAmount
+      });
+      
+      // Initial balances
+      const initialTokenBalance = await mockToken.balanceOf(user2.address);
+      const initialETHBalance = await ethers.provider.getBalance(user2.address);
+      
+      // Recover both ETH and tokens
+      await swapAllToETH.connect(owner).recoverBoth(
+        [await mockToken.getAddress()],
+        [tokenAmount],
+        ethAmount,
+        user2.address
+      );
+      
+      // Check user2 received both tokens and ETH
+      expect(await mockToken.balanceOf(user2.address)).to.equal(initialTokenBalance + tokenAmount);
+      const finalETHBalance = await ethers.provider.getBalance(user2.address);
+      expect(finalETHBalance - initialETHBalance).to.equal(ethAmount);
+    });
   });
 }); 
