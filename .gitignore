@@ -17,6 +17,10 @@ artifacts/
 typechain/
 typechain-types/
 
+# TypeScript
+dist/
+*.tsbuildinfo
+
 # Coverage
 coverage/
 coverage.json

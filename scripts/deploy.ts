@@ -1,9 +1,7 @@
-// We require the Hardhat Runtime Environment explicitly here. This is optional
-// but useful for running the script in a standalone fashion through `node <script>`.
-const { ethers } = require("hardhat");
+import { ethers, run } from "hardhat";
 
 // Mainnet addresses
-const ROUTER_ADDRESS = {
+const ROUTER_ADDRESS: { [key: string]: string } = {
   // Uniswap V2 Router
   mainnet: "0x7a250d5630B4cF539739dF2C5dAcb4c659F2488D",
   goerli: "0x7a250d5630B4cF539739dF2C5dAcb4c659F2488D", // Same as mainnet
@@ -11,16 +9,25 @@ const ROUTER_ADDRESS = {
   hardhat: "0x7a250d5630B4cF539739dF2C5dAcb4c659F2488D", // Same as mainnet
 };
 
-const WETH_ADDRESS = {
+const WETH_ADDRESS: { [key: string]: string } = {
   mainnet: "0xC02aaA39b223FE8D0A0e5C4F27eAD9083C756Cc2",
   goerli: "0xB4FBF271143F4FBf7B91A5ded31805e42b2208d6",
   sepolia: "0x7b79995e5f793A07Bc00c21412e50Ecae098E7f9",
   hardhat: "0xC02aaA39b223FE8D0A0e5C4F27eAD9083C756Cc2", // Same as mainnet
 };
 
-async function main() {
+interface DeploymentInfo {
+  network: string;
+  contractAddress: string;
+  routerAddress: string;
+  wethAddress: string;
+  deployer: string;
+  timestamp: string;
+}
+
+async function main(): Promise<DeploymentInfo> {
   // Get the network name
-  const network = hre.network.name;
+  const network = (await ethers.provider.getNetwork()).name;
   console.log(`Deploying to ${network} network...`);
   
   // Get the contract factory
@@ -42,13 +49,16 @@ async function main() {
   
   // Wait for a few confirmations for Etherscan verification
   console.log("Waiting for confirmations...");
-  await swapAllToETH.deploymentTransaction().wait(5);
+  const deploymentTx = swapAllToETH.deploymentTransaction();
+  if (deploymentTx) {
+    await deploymentTx.wait(5);
+  }
   
   // Verify the contract on Etherscan if not on local network
   if (network !== "hardhat" && network !== "localhost") {
     console.log("Verifying contract on Etherscan...");
     try {
-      await hre.run("verify:verify", {
+      await run("verify:verify", {
         address: deployedAddress,
         constructorArguments: [routerAddress, wethAddress],
       });
@@ -58,13 +68,39 @@ async function main() {
     }
   }
   
-  return deployedAddress;
+  const signers = await ethers.getSigners();
+  const deployer = signers[0];
+  
+  if (!deployer) {
+    throw new Error("No deployer account found");
+  }
+  
+  const deploymentInfo: DeploymentInfo = {
+    network: network || "unknown",
+    contractAddress: deployedAddress,
+    routerAddress: routerAddress || "",
+    wethAddress: wethAddress || "",
+    deployer: deployer.address,
+    timestamp: new Date().toISOString()
+  };
+  
+  return deploymentInfo;
 }
 
 // We recommend this pattern to be able to use async/await everywhere
 // and properly handle errors.
 main()
-  .then(() => process.exit(0))
+  .then((deploymentInfo) => {
+    console.log("\nDeployment Summary:");
+    console.log("===================");
+    console.log(`Network: ${deploymentInfo.network}`);
+    console.log(`Contract Address: ${deploymentInfo.contractAddress}`);
+    console.log(`Router Address: ${deploymentInfo.routerAddress}`);
+    console.log(`WETH Address: ${deploymentInfo.wethAddress}`);
+    console.log(`Deployer: ${deploymentInfo.deployer}`);
+    console.log(`Timestamp: ${deploymentInfo.timestamp}`);
+    process.exit(0);
+  })
   .catch((error) => {
     console.error(error);
     process.exit(1);

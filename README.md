@@ -51,6 +51,11 @@ cd telegrambotSwapcontract
 npm install
 ```
 
+3. Build the project (compiles contracts and generates TypeScript types):
+```bash
+npm run build
+```
+
 3. Create environment file:
 ```bash
 cp .env.example .env
@@ -69,7 +74,14 @@ REPORT_GAS=true
 ### Compilation
 
 ```bash
+# Compile contracts and generate TypeScript types
+npm run build
+
+# Or compile contracts only
 npm run compile
+
+# Generate TypeScript types only
+npm run typechain
 ```
 
 ### Testing
@@ -82,7 +94,7 @@ npm test
 
 #### Local Network
 ```bash
-npx hardhat run scripts/deploy.js --network localhost
+npx hardhat run scripts/deploy.ts --network localhost
 ```
 
 #### Test Networks

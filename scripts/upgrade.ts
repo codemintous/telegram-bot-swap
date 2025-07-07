@@ -1,14 +1,28 @@
-// We require the Hardhat Runtime Environment explicitly here. This is optional
-// but useful for running the script in a standalone fashion through `node <script>`.
-const { ethers, upgrades } = require("hardhat");
+import { ethers, run } from "hardhat";
+import { upgrades } from "hardhat";
 
-async function main() {
+interface UpgradeInfo {
+  network: string;
+  proxyAddress: string;
+  oldImplementation: string;
+  newImplementation: string;
+  upgrader: string;
+  timestamp: string;
+}
+
+async function main(): Promise<UpgradeInfo> {
   // Get the network name
-  const network = hre.network.name;
+  const network = (await ethers.provider.getNetwork()).name;
   console.log(`Upgrading on ${network} network...`);
   
   // Get the signers
-  const [deployer] = await ethers.getSigners();
+  const signers = await ethers.getSigners();
+  const deployer = signers[0];
+  
+  if (!deployer) {
+    throw new Error("No deployer account found");
+  }
+  
   console.log(`Upgrading with account: ${deployer.address}`);
   
   // Get the proxy address from command line arguments or use a default
@@ -39,13 +53,16 @@ async function main() {
   
   // Wait for a few confirmations for Etherscan verification
   console.log("Waiting for confirmations...");
-  await upgraded.deploymentTransaction().wait(5);
+  const deploymentTx = upgraded.deploymentTransaction();
+  if (deploymentTx) {
+    await deploymentTx.wait(5);
+  }
   
   // Verify the new implementation contract on Etherscan if not on local network
   if (network !== "hardhat" && network !== "localhost") {
     console.log("Verifying new implementation contract on Etherscan...");
     try {
-      await hre.run("verify:verify", {
+      await run("verify:verify", {
         address: newImplementation,
         constructorArguments: [],
       });
@@ -66,29 +83,32 @@ async function main() {
     console.error("Upgrade test failed:", error);
   }
   
-  console.log("\nUpgrade Summary:");
-  console.log("================");
-  console.log(`Network: ${network}`);
-  console.log(`Proxy Address: ${proxyAddress}`);
-  console.log(`Old Implementation: ${currentImplementation}`);
-  console.log(`New Implementation: ${newImplementation}`);
-  console.log(`Upgrader: ${deployer.address}`);
-  console.log(`Timestamp: ${new Date().toISOString()}`);
-  
-  return {
-    network: network,
-    proxyAddress: proxyAddress,
+  const upgradeInfo: UpgradeInfo = {
+    network: network || "unknown",
+    proxyAddress,
     oldImplementation: currentImplementation,
-    newImplementation: newImplementation,
+    newImplementation,
     upgrader: deployer.address,
     timestamp: new Date().toISOString()
   };
+  
+  return upgradeInfo;
 }
 
 // We recommend this pattern to be able to use async/await everywhere
 // and properly handle errors.
 main()
-  .then(() => process.exit(0))
+  .then((upgradeInfo) => {
+    console.log("\nUpgrade Summary:");
+    console.log("================");
+    console.log(`Network: ${upgradeInfo.network}`);
+    console.log(`Proxy Address: ${upgradeInfo.proxyAddress}`);
+    console.log(`Old Implementation: ${upgradeInfo.oldImplementation}`);
+    console.log(`New Implementation: ${upgradeInfo.newImplementation}`);
+    console.log(`Upgrader: ${upgradeInfo.upgrader}`);
+    console.log(`Timestamp: ${upgradeInfo.timestamp}`);
+    process.exit(0);
+  })
   .catch((error) => {
     console.error(error);
     process.exit(1);

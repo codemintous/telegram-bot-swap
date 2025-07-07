@@ -1,10 +1,27 @@
-const { expect } = require("chai");
-const { ethers } = require("hardhat");
-const { loadFixture } = require("@nomicfoundation/hardhat-network-helpers");
+import { expect } from "chai";
+import { ethers } from "hardhat";
+import { loadFixture } from "@nomicfoundation/hardhat-network-helpers";
+import type { 
+  SwapAllToETH, 
+  MockUniswapV2Router, 
+  MockWETH, 
+  MockToken 
+} from "../typechain-types";
+import type { SignerWithAddress } from "@nomicfoundation/hardhat-ethers/signers";
+
+interface TestFixture {
+  swapAllToETH: SwapAllToETH;
+  mockRouter: MockUniswapV2Router;
+  mockWETH: MockWETH;
+  mockToken: MockToken;
+  owner: SignerWithAddress;
+  user1: SignerWithAddress;
+  user2: SignerWithAddress;
+}
 
 describe("SwapAllToETH", function () {
   // We define a fixture to reuse the same setup in every test.
-  async function deployContractFixture() {
+  async function deployContractFixture(): Promise<TestFixture> {
     // Get the signers
     const [owner, user1, user2] = await ethers.getSigners();
     
@@ -75,7 +92,7 @@ describe("SwapAllToETH", function () {
       
       // Account for gas costs in the calculation
       const receipt = await tx.wait();
-      const gasCost = receipt.gasUsed * receipt.gasPrice;
+      const gasCost = receipt!.gasUsed * receipt!.gasPrice;
       
       // The user should have received the ETH (minus gas costs)
       expect(finalETHBalance + gasCost - initialETHBalance).to.be.closeTo(
@@ -113,7 +130,7 @@ describe("SwapAllToETH", function () {
       
       // Account for gas costs in the calculation
       const receipt = await tx.wait();
-      const gasCost = receipt.gasUsed * receipt.gasPrice;
+      const gasCost = receipt!.gasUsed * receipt!.gasPrice;
       
       // The user should have received the ETH (minus gas costs)
       expect(finalETHBalance + gasCost - initialETHBalance).to.be.closeTo(
