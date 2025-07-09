@@ -1,60 +1,122 @@
-import { HardhatUserConfig } from "hardhat/config";
-import "@nomicfoundation/hardhat-toolbox";
-import "dotenv/config";
+import "@nomicfoundation/hardhat-verify";
+import "hardhat-gas-reporter";
+import "@nomicfoundation/hardhat-ethers";
+import "@typechain/hardhat";
+import "@openzeppelin/hardhat-upgrades";
 import "hardhat-contract-sizer";
 import "solidity-coverage";
 import "hardhat-tracer";
-import "hardhat-gas-reporter";
+import "@nomicfoundation/hardhat-chai-matchers";
 import "hardhat-abi-exporter";
-import "@openzeppelin/hardhat-upgrades";
+require("dotenv").config();
 
-const PRIVATE_KEY = process.env.PRIVATE_KEY || "0x0000000000000000000000000000000000000000000000000000000000000000";
-const ETHERSCAN_API_KEY = process.env.ETHERSCAN_API_KEY || "";
-const INFURA_API_KEY = process.env.INFURA_API_KEY || "";
+import { HardhatUserConfig } from "hardhat/config";
+
+const mnemonic = process.env.MNEMONIC;
+if (!mnemonic) {
+  throw new Error("Please set your MNEMONIC in a .env file");
+}
+
+const infuraApiKey = process.env.INFURA_API_KEY;
+// Add your private key here (without 0x prefix)
+const privateKey = "your_private_key_here_without_0x_prefix";
+
+if (!infuraApiKey) {
+  throw new Error("Please set your INFURA_API_KEY in a .env file");
+}
+
+const chainIds = {
+  ganache: 5777,
+  goerli: 5,
+  hardhat: 7545,
+  kovan: 42,
+  mainnet: 1,
+  rinkeby: 4,
+  bscTestnet: 97,
+  bscMainnet: 56,
+  MaticTestnet: 80001,
+  MaticMainnet: 137,
+  ropsten: 3,
+  ArbitrumOne: 42161,
+  BaseMainnet: 8453,
+};
 
 const config: HardhatUserConfig = {
-  solidity: {
-    version: "0.8.20",
-    settings: {
-      optimizer: {
-        enabled: true,
-        runs: 200
-      }
-    }
+  gasReporter: {
+    enabled: true,
+    currency: "USD",
+    gasPrice: 21,
   },
   networks: {
     hardhat: {
-      chainId: 31337,
+      accounts: {
+        mnemonic,
+      },
       forking: {
-        url: `https://mainnet.infura.io/v3/${INFURA_API_KEY}`,
-        enabled: false,
-      }
-    },
-    localhost: {
-      url: "http://127.0.0.1:8545"
-    },
-    goerli: {
-      url: `https://goerli.infura.io/v3/${INFURA_API_KEY}`,
-      accounts: [PRIVATE_KEY],
-      chainId: 5,
-    },
-    sepolia: {
-      url: `https://sepolia.infura.io/v3/${INFURA_API_KEY}`,
-      accounts: [PRIVATE_KEY],
-      chainId: 11155111,
-    },
-    mainnet: {
-      url: `https://mainnet.infura.io/v3/${INFURA_API_KEY}`,
-      accounts: [PRIVATE_KEY],
+        // eslint-disable-next-line
+        enabled: true,
+        url:"https://mainnet.infura.io/v3/5886b76859c049da9aefde0d708cb3e0",
+      },
       chainId: 1,
-    }
+      gas: 12000000
+    },
+    ganache: {
+      chainId: 5777,
+      url: "http://127.0.0.1:7545/",
+    },
+    // mainnet: {
+    //   accounts: [
+    //     "your_private_key_here_without_0x_prefix", // Replace with your actual private key
+
+    //   ],
+    //   chainId: chainIds["mainnet"],
+    //   url: "https://mainnet.infura.io/v3/5886b76859c049da9aefde0d708cb3e0",
+    // }
+    // rinkeby: {
+    //   accounts: {
+    //     mnemonic,
+    //   },
+    //   chainId: chainIds["rinkeby"],
+    //   url: "https://rinkeby.infura.io/v3/" + infuraApiKey + "",
+    // }
   },
-  gasReporter: {
-    enabled: process.env.REPORT_GAS !== undefined,
-    currency: "USD",
+  solidity: {
+    compilers: [
+      {
+        version: "0.8.20",
+        settings: {
+          optimizer: {
+            enabled: true,
+            runs: 200,
+          },
+        },
+      },
+    ],
+  },
+  mocha: {
+    timeout: 400000,
   },
   etherscan: {
-    apiKey: ETHERSCAN_API_KEY,
+    apiKey: {
+      mainnet: process.env.ETHERSCAN_API_KEY
+        ? process.env.ETHERSCAN_API_KEY
+        : "",
+      bsc: process.env.BSCSCAN_API_KEY ? process.env.BSCSCAN_API_KEY : "",
+    },
+  },
+  abiExporter: {
+    path: "./abi",
+    clear: true,
+    flat: true,
+    only: [],
+    spacing: 2,
+  },
+  contractSizer: {
+    alphaSort: true,
+    disambiguatePaths: false,
+    runOnCompile: true,
+    strict: true,
+    only: [],
   },
   paths: {
     sources: "./contracts",
@@ -66,25 +128,6 @@ const config: HardhatUserConfig = {
     outDir: "typechain-types",
     target: "ethers-v6"
   },
-  contractSizer: {
-    alphaSort: true,
-    disambiguatePaths: false,
-    runOnCompile: true,
-    strict: true,
-    only: [],
-  },
-  abiExporter: {
-    path: './abi',
-    runOnCompile: true,
-    clear: true,
-    flat: true,
-    only: [],
-    spacing: 2,
-    pretty: false,
-  },
-  mocha: {
-    timeout: 40000
-  }
 };
 
 export default config; 

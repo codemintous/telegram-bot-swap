@@ -337,4 +337,313 @@ describe("SwapAllToETHUpgradeable", function () {
       ).to.be.revertedWithCustomError(SwapAllToETHUpgradeable, "InvalidWETH");
     });
   });
+
+  describe("Quote Failure Scenarios", function () {
+    it("Should handle quote failure and refund tokens", async function () {
+      const { swapAllToETHUpgradeable, mockRouter, mockToken, user1 } = await loadFixture(deployContractFixture);
+      
+      // Setup: User1 gets some tokens
+      const tokenAmount = ethers.parseUnits("1000", 18);
+      await mockToken.mint(user1.address, tokenAmount);
+      await mockToken.connect(user1).approve(await swapAllToETHUpgradeable.getAddress(), tokenAmount);
+      
+      // Setup mock router to fail quote by setting amountOut to 0
+      await mockRouter.setAmountOut(0);
+      
+      // Initial balances
+      const initialTokenBalance = await mockToken.balanceOf(user1.address);
+      const initialETHBalance = await ethers.provider.getBalance(user1.address);
+      
+      // Execute swap - should handle quote failure gracefully
+      const tx = await swapAllToETHUpgradeable.connect(user1).swapAllTokensToETH(
+        [await mockToken.getAddress()],
+        100 // 1% slippage
+      );
+      
+      // Check that TokenSwapFailed event was emitted
+      await expect(tx).to.emit(swapAllToETHUpgradeable, "TokenSwapFailed");
+      
+      // Check that tokens were refunded
+      const finalTokenBalance = await mockToken.balanceOf(user1.address);
+      expect(finalTokenBalance).to.equal(initialTokenBalance);
+      
+      // Check that no ETH was received
+      const finalETHBalance = await ethers.provider.getBalance(user1.address);
+      const receipt = await tx.wait();
+      const gasCost = receipt!.gasUsed * receipt!.gasPrice;
+      expect(finalETHBalance + gasCost).to.equal(initialETHBalance);
+    });
+
+    it("Should handle quote failure with invalid path length", async function () {
+      const { swapAllToETHUpgradeable, mockRouter, mockToken, user1 } = await loadFixture(deployContractFixture);
+      
+      // Create a mock router that returns invalid quote array
+      const MockRouterWithInvalidQuote = await ethers.getContractFactory("MockUniswapV2Router");
+      const mockRouterWithInvalidQuote = await MockRouterWithInvalidQuote.deploy();
+      
+      // Update the contract to use the new mock router
+      const [owner] = await ethers.getSigners();
+      await swapAllToETHUpgradeable.connect(owner).updateRouter(
+        await mockRouterWithInvalidQuote.getAddress()
+      );
+      
+      // Setup: User1 gets some tokens
+      const tokenAmount = ethers.parseUnits("1000", 18);
+      await mockToken.mint(user1.address, tokenAmount);
+      await mockToken.connect(user1).approve(await swapAllToETHUpgradeable.getAddress(), tokenAmount);
+      
+      // Setup mock router to return invalid quote (empty array)
+      await mockRouterWithInvalidQuote.setAmountOut(0);
+      
+      // Execute swap - should handle invalid quote gracefully
+      const tx = await swapAllToETHUpgradeable.connect(user1).swapAllTokensToETH(
+        [await mockToken.getAddress()],
+        100 // 1% slippage
+      );
+      
+      // Check that TokenSwapFailed event was emitted
+      await expect(tx).to.emit(swapAllToETHUpgradeable, "TokenSwapFailed");
+      
+      // Check that tokens were refunded
+      const finalTokenBalance = await mockToken.balanceOf(user1.address);
+      expect(finalTokenBalance).to.equal(tokenAmount);
+    });
+
+    it("Should handle quote failure with zero minimum output", async function () {
+      const { swapAllToETHUpgradeable, mockRouter, mockToken, user1 } = await loadFixture(deployContractFixture);
+      
+      // Setup: User1 gets some tokens
+      const tokenAmount = ethers.parseUnits("1000", 18);
+      await mockToken.mint(user1.address, tokenAmount);
+      await mockToken.connect(user1).approve(await swapAllToETHUpgradeable.getAddress(), tokenAmount);
+      
+      // Setup mock router to return very small amount that results in zero minOut
+      await mockRouter.setAmountOut(1); // Very small amount
+      
+      // Execute swap with high slippage that would result in zero minOut
+      const tx = await swapAllToETHUpgradeable.connect(user1).swapAllTokensToETH(
+        [await mockToken.getAddress()],
+        10000 // 100% slippage - this will make minOut = 0
+      );
+      
+      // Check that TokenSwapFailed event was emitted
+      await expect(tx).to.emit(swapAllToETHUpgradeable, "TokenSwapFailed");
+      
+      // Check that tokens were refunded
+      const finalTokenBalance = await mockToken.balanceOf(user1.address);
+      expect(finalTokenBalance).to.equal(tokenAmount);
+    });
+  });
+
+  describe("Swap Failure Scenarios", function () {
+    it("Should handle swap failure and refund tokens", async function () {
+      const { swapAllToETHUpgradeable, mockRouter, mockToken, user1 } = await loadFixture(deployContractFixture);
+      
+      // Setup: User1 gets some tokens
+      const tokenAmount = ethers.parseUnits("1000", 18);
+      await mockToken.mint(user1.address, tokenAmount);
+      await mockToken.connect(user1).approve(await swapAllToETHUpgradeable.getAddress(), tokenAmount);
+      
+      // Setup mock router to fail swap by setting insufficient ETH amount
+      await mockRouter.setAmountOut(ethers.parseEther("0.5")); // Quote returns 0.5 ETH
+      await mockRouter.setMockETHAmount(0); // But swap returns 0 ETH
+      
+      // Initial balances
+      const initialTokenBalance = await mockToken.balanceOf(user1.address);
+      
+      // Execute swap - should handle swap failure gracefully
+      const tx = await swapAllToETHUpgradeable.connect(user1).swapAllTokensToETH(
+        [await mockToken.getAddress()],
+        100 // 1% slippage
+      );
+      
+      // Check that TokenSwapFailed event was emitted
+      const receipt = await tx.wait();
+      const event = receipt!.logs.find(
+        log => log.topics[0] === swapAllToETHUpgradeable.interface.getEventTopic("TokenSwapFailed")
+      );
+      expect(event).to.not.be.undefined;
+      
+      // Check that tokens were refunded
+      const finalTokenBalance = await mockToken.balanceOf(user1.address);
+      expect(finalTokenBalance).to.equal(initialTokenBalance);
+    });
+
+    it("Should handle swap failure due to insufficient output amount", async function () {
+      const { swapAllToETHUpgradeable, mockRouter, mockToken, user1 } = await loadFixture(deployContractFixture);
+      
+      // Setup: User1 gets some tokens
+      const tokenAmount = ethers.parseUnits("1000", 18);
+      await mockToken.mint(user1.address, tokenAmount);
+      await mockToken.connect(user1).approve(await swapAllToETHUpgradeable.getAddress(), tokenAmount);
+      
+      // Setup mock router to return less ETH than minimum required
+      await mockRouter.setAmountOut(ethers.parseEther("0.5")); // Quote returns 0.5 ETH
+      await mockRouter.setMockETHAmount(ethers.parseEther("0.1")); // But swap returns only 0.1 ETH
+      
+      // Execute swap with low slippage tolerance
+      const tx = await swapAllToETHUpgradeable.connect(user1).swapAllTokensToETH(
+        [await mockToken.getAddress()],
+        100 // 1% slippage - minimum output would be ~0.495 ETH
+      );
+      
+      // Check that TokenSwapFailed event was emitted
+      const receipt = await tx.wait();
+      const event = receipt!.logs.find(
+        log => log.topics[0] === swapAllToETHUpgradeable.interface.getEventTopic("TokenSwapFailed")
+      );
+      expect(event).to.not.be.undefined;
+      
+      // Check that tokens were refunded
+      const finalTokenBalance = await mockToken.balanceOf(user1.address);
+      expect(finalTokenBalance).to.equal(tokenAmount);
+    });
+
+    it("Should handle ETH transfer failure after successful swap", async function () {
+      const { swapAllToETHUpgradeable, mockRouter, mockToken, user1 } = await loadFixture(deployContractFixture);
+      
+      // Setup: User1 gets some tokens
+      const tokenAmount = ethers.parseUnits("1000", 18);
+      await mockToken.mint(user1.address, tokenAmount);
+      await mockToken.connect(user1).approve(await swapAllToETHUpgradeable.getAddress(), tokenAmount);
+      
+      // Setup mock router for successful swap
+      const ethReturn = ethers.parseEther("0.5");
+      await mockRouter.setAmountOut(ethReturn);
+      await mockRouter.setMockETHAmount(ethReturn);
+      
+      // Create a contract that can't receive ETH (to simulate ETH transfer failure)
+      const MockContract = await ethers.getContractFactory("MockToken"); // Using any contract as example
+      const mockContract = await MockContract.deploy("Mock", "MOCK");
+      
+      // Transfer ownership to the mock contract (which can't receive ETH)
+      const [owner] = await ethers.getSigners();
+      await swapAllToETHUpgradeable.connect(owner).transferOwnership(
+        await mockContract.getAddress()
+      );
+      
+      // Execute swap - should fail when trying to send ETH to the contract
+      const tx = await swapAllToETHUpgradeable.connect(user1).swapAllTokensToETH(
+        [await mockToken.getAddress()],
+        100 // 1% slippage
+      );
+      
+      // Check that TokenSwapFailed event was emitted
+      const receipt = await tx.wait();
+      const event = receipt!.logs.find(
+        log => log.topics[0] === swapAllToETHUpgradeable.interface.getEventTopic("TokenSwapFailed")
+      );
+      expect(event).to.not.be.undefined;
+      
+      // Check that tokens were refunded
+      const finalTokenBalance = await mockToken.balanceOf(user1.address);
+      expect(finalTokenBalance).to.equal(tokenAmount);
+    });
+
+    it("Should handle WETH unwrap failure", async function () {
+      const { swapAllToETHUpgradeable, mockWETH, user1 } = await loadFixture(deployContractFixture);
+      
+      // Setup: User1 gets some WETH
+      const wethAmount = ethers.parseEther("1.0");
+      await mockWETH.deposit({ value: wethAmount });
+      await mockWETH.transfer(user1.address, wethAmount);
+      await mockWETH.connect(user1).approve(await swapAllToETHUpgradeable.getAddress(), wethAmount);
+      
+      // Create a mock WETH that fails on withdraw
+      const MockWETHWithFailure = await ethers.getContractFactory("MockWETH");
+      const mockWETHWithFailure = await MockWETHWithFailure.deploy();
+      
+      // Update the contract to use the new mock WETH
+      const [owner] = await ethers.getSigners();
+      await swapAllToETHUpgradeable.connect(owner).updateWETH(
+        await mockWETHWithFailure.getAddress()
+      );
+      
+      // Transfer WETH to the new mock contract
+      await mockWETH.transfer(await mockWETHWithFailure.getAddress(), wethAmount);
+      
+      // Execute swap - should handle WETH unwrap failure gracefully
+      const tx = await swapAllToETHUpgradeable.connect(user1).swapAllTokensToETH(
+        [await mockWETHWithFailure.getAddress()],
+        100 // 1% slippage
+      );
+      
+      // Check that TokenSwapFailed event was emitted
+      const receipt = await tx.wait();
+      const event = receipt!.logs.find(
+        log => log.topics[0] === swapAllToETHUpgradeable.interface.getEventTopic("TokenSwapFailed")
+      );
+      expect(event).to.not.be.undefined;
+    });
+
+    it("Should handle multiple tokens with mixed success/failure", async function () {
+      const { swapAllToETHUpgradeable, mockRouter, mockToken, mockWETH, user1 } = await loadFixture(deployContractFixture);
+      
+      // Create a second mock token
+      const MockToken2 = await ethers.getContractFactory("MockToken");
+      const mockToken2 = await MockToken2.deploy("Mock Token 2", "MTK2");
+      
+      // Setup: User1 gets tokens and WETH
+      const tokenAmount = ethers.parseUnits("1000", 18);
+      const wethAmount = ethers.parseEther("1.0");
+      
+      await mockToken.mint(user1.address, tokenAmount);
+      await mockToken2.mint(user1.address, tokenAmount);
+      await mockWETH.deposit({ value: wethAmount });
+      await mockWETH.transfer(user1.address, wethAmount);
+      
+      // Approve all tokens
+      await mockToken.connect(user1).approve(await swapAllToETHUpgradeable.getAddress(), tokenAmount);
+      await mockToken2.connect(user1).approve(await swapAllToETHUpgradeable.getAddress(), tokenAmount);
+      await mockWETH.connect(user1).approve(await swapAllToETHUpgradeable.getAddress(), wethAmount);
+      
+      // Setup mock router: first token succeeds, second token fails
+      await mockRouter.setAmountOut(ethers.parseEther("0.5")); // Quote for first token
+      await mockRouter.setMockETHAmount(ethers.parseEther("0.5")); // Swap succeeds for first token
+      
+      // Initial balances
+      const initialWETHBalance = await mockWETH.balanceOf(user1.address);
+      const initialToken1Balance = await mockToken.balanceOf(user1.address);
+      const initialToken2Balance = await mockToken2.balanceOf(user1.address);
+      const initialETHBalance = await ethers.provider.getBalance(user1.address);
+      
+      // Execute swap with multiple tokens
+      const tx = await swapAllToETHUpgradeable.connect(user1).swapAllTokensToETH(
+        [await mockWETH.getAddress(), await mockToken.getAddress(), await mockToken2.getAddress()],
+        100 // 1% slippage
+      );
+      
+      // Check results
+      const receipt = await tx.wait();
+      const gasCost = receipt!.gasUsed * receipt!.gasPrice;
+      
+      // WETH should be successfully unwrapped
+      expect(await mockWETH.balanceOf(user1.address)).to.equal(0);
+      
+      // First token should be successfully swapped
+      expect(await mockToken.balanceOf(user1.address)).to.equal(0);
+      
+      // Second token should be refunded due to swap failure
+      expect(await mockToken2.balanceOf(user1.address)).to.equal(initialToken2Balance);
+      
+      // User should receive ETH from WETH unwrap and first token swap
+      const finalETHBalance = await ethers.provider.getBalance(user1.address);
+      const expectedETH = wethAmount + ethers.parseEther("0.5"); // WETH + first token swap
+      expect(finalETHBalance + gasCost - initialETHBalance).to.be.closeTo(
+        expectedETH,
+        ethers.parseEther("0.01") // Allow for small rounding errors
+      );
+      
+      // Check that appropriate events were emitted
+      const swapEvents = receipt!.logs.filter(
+        log => log.topics[0] === swapAllToETHUpgradeable.interface.getEventTopic("TokenSwapped")
+      );
+      const failEvents = receipt!.logs.filter(
+        log => log.topics[0] === swapAllToETHUpgradeable.interface.getEventTopic("TokenSwapFailed")
+      );
+      
+      expect(swapEvents.length).to.equal(2); // WETH and first token
+      expect(failEvents.length).to.equal(1); // Second token
+    });
+  });
 }); 

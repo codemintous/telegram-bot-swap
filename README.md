@@ -183,10 +183,32 @@ The project includes comprehensive tests covering:
 - Recovery functions
 - Error handling scenarios
 
+### Regular Tests
 Run tests with:
 ```bash
 npm test
 ```
+
+### Mainnet Fork Tests
+For testing with real mainnet tokens and ETH (requires mainnet RPC URL):
+
+1. Set up your environment variables:
+```env
+INFURA_API_KEY=your_infura_api_key_here
+# or
+MAINNET_RPC_URL=your_mainnet_rpc_url_here
+```
+
+2. Run mainnet fork tests:
+```bash
+# Run all tests on mainnet fork
+npm run test:mainnet
+
+# Run only upgradeable contract mainnet tests
+npm run test:mainnet:upgradeable
+```
+
+**Note**: Mainnet fork tests require a valid mainnet RPC URL and will use real token addresses and prices from mainnet. These tests are more comprehensive and test actual integration with Uniswap V2.
 
 ## Gas Optimization
 
